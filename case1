@@ -7,6 +7,25 @@ process type-spc_t
 can access /var/log/ - yes
 can access /etc/-yes
 
+============================================================================= 
+output reference:
+
+$ # ps -Z 2304727
+LABEL                               PID TTY      STAT   TIME COMMAND
+system_u:system_r:spc_t:s0      2304727 ?        Ss     0:00 tail -f /var/log/audit/audit.log
+
+$ oc get pod nginx-deployment-6d5c7d4b4b-p8bt6 -o yaml | grep scc
+    openshift.io/scc: privileged
+
+$ oc logs nginx-deployment-6d5c7d4b4b-p8bt6 -c sidecar | head -2
+rhel86-sno-man
+type=SYSCALL msg=audit(1689698907.823:80423): arch=c000003e syscall=1 success=yes exit=8928428 a0=4 a1=7f0062c51000 a2=883cac a3=0 items=0 ppid=2299640 pid=2300292 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="load_policy" exe="/usr/sbin/load_policy" subj=system_u:system_r:spc_t:s0:c641,c914 key=(null)ARCH=x86_64 SYSCALL=write AUID="unset" UID="root" GID="root" EUID="root" SUID="root" FSUID="root" EGID="root" SGID="root" FSGID="root"
+
+=============================================================================
+
+Observation: pod can read audit logs and any other files within /var/log with spc_t type and also can access host's /etc directory with privileged scc assigned to pod's account.
+
+=============================================================================
 apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
 kind: Deployment
 metadata:
