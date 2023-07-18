@@ -1,0 +1,83 @@
+serviceAccountName-	nginx
+sccType-custom
+scc-hostmount-anyuid-nginx
+scc hostPath plugin-	enabled
+scc hostPath Volume allowed-	enabled
+seLinuxOptions type in pod manifest? -	container_logreader_t
+process type-	container_logreader_t
+can access /var/log/-	yes
+can access /etc/ -	no
+=============================================================================
+  
+output reference:
+
+# ps -Z 2372228
+LABEL                               PID TTY      STAT   TIME COMMAND
+system_u:system_r:container_logreader_t:s0:c334,c743 2372228 ? Ss   0:00 tail -f /var/log/audit/audit.log
+  
+$ oc get pod nginx-deployment-6c8cdd497d-bqfk6 -o yaml | grep scc
+    openshift.io/scc: hostmount-anyuid-nginx
+  
+$ oc logs nginx-deployment-6c8cdd497d-bqfk6 -c sidecar | head -4
+cat: can't open '/etc/hostname': Permission denied
+Sat Jul 15 01:56:45 UTC 2023
+Sat Jul 15 02:02:26 UTC 2023
+type=MAC_POLICY_LOAD msg=audit(1689700410.302:80568): auid=4294967295 ses=4294967295 lsm=selinux res=1AUID="unset"
+=============================================================================
+
+Observation: pod can only read audit logs and any other files within /var/log with container_logreader_t type but cannot access host's /etc directory.
+=============================================================================
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 1 # tells deployment to run 2 pods matching the template
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      serviceAccountName: privileged
+      #serviceAccountName: nginx
+      containers:
+      - name: nginx
+        image: quay.io/rh_ee_raravi/nginx:1.14.2
+        ports:
+        - containerPort: 80
+        securityContext:
+                #seLinuxOptions:
+                #type: logsample-seprofile_logsample.process
+                privileged: true
+        args: [/bin/sh, -c, 'while true; do echo $(date) >> /var/log/date.log; sleep 1; done']
+        #args: [/bin/sh, -c, 'while true; do rm /var/log/date.log; touch /var/log/date.log; echo $(date) >> /var/log/date.log; sleep 1; done']
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+      - name: sidecar
+        image: quay.io/rh_ee_raravi/busybox:latest
+        command: ["/bin/sh", "-c"]
+        args: ["cat /etc/hostname; tail -f /var/log/audit/audit.log"]
+        #args: [/bin/sh, -c, 'cat /etc/passwd']
+        volumeMounts:
+        - name: etcdir
+          mountPath: /etc
+          readOnly: true
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        securityContext:
+               seLinuxOptions:
+                type: container_logreader_t
+                #privileged: true
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log
+            type: Directory
+        - name: etcdir
+          hostPath:
+            path: /etc
+            type: Directory
