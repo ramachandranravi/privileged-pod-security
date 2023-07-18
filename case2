@@ -1,0 +1,83 @@
+serviceAccountName-	privileged
+scc-privileged
+scc hostPath plugin-	enabled
+scc hostPath Volume allowed-	enabled
+seLinuxOptions type in pod manifest? -	container_logreader_t
+process type-	container_logreader_t
+can access /var/log/-	yes
+can access /etc/ -	no
+=============================================================================
+  
+output reference:
+
+$ ps -Z 2263544
+LABEL                               PID TTY      STAT   TIME COMMAND
+system_u:system_r:container_logreader_t:s0:c537,c885 2263544 ? Ss   0:00 tail -f /var/log/audit/audit.log
+
+$ oc get pod nginx-deployment-5895594bd5-z5jnr -o yaml | grep -i scc
+    openshift.io/scc: privileged
+
+$ oc logs nginx-deployment-5895594bd5-z5jnr -c sidecar | head -3
+cat: can't open '/etc/hostname': Permission denied
+type=MAC_POLICY_LOAD msg=audit(1689698123.190:80346): auid=4294967295 ses=4294967295 lsm=selinux res=1AUID="unset"
+type=SYSCALL msg=audit(1689698123.190:80346): arch=c000003e syscall=1 success=yes exit=8928428 a0=4 a1=7fba2489b000 a2=883cac a3=0 items=0 ppid=2261359 pid=2262153 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="load_policy" exe="/usr/sbin/load_policy" subj=system_u:system_r:spc_t:s0:c641,c914 key=(null)ARCH=x86_64 SYSCALL=write AUID="unset" UID="root" GID="root" EUID="root" SUID="root" FSUID="root" EGID="root" SGID="root" FSGID="root"
+=============================================================================
+
+Observation: pod can read audit logs and any other files within /var/log with container_logreader_t type but cannot access host's /etc directory despite privileged scc is assigned to pod's account.
+.containers.selinuxoptions.type takes precedence over pod's scc.
+
+=============================================================================
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 1 # tells deployment to run 2 pods matching the template
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      serviceAccountName: privileged
+      #serviceAccountName: nginx
+      containers:
+      - name: nginx
+        image: quay.io/rh_ee_raravi/nginx:1.14.2
+        ports:
+        - containerPort: 80
+        securityContext:
+                #seLinuxOptions:
+                #type: logsample-seprofile_logsample.process
+                privileged: true
+        args: [/bin/sh, -c, 'while true; do echo $(date) >> /var/log/date.log; sleep 1; done']
+        #args: [/bin/sh, -c, 'while true; do rm /var/log/date.log; touch /var/log/date.log; echo $(date) >> /var/log/date.log; sleep 1; done']
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+      - name: sidecar
+        image: quay.io/rh_ee_raravi/busybox:latest
+        command: ["/bin/sh", "-c"]
+        args: ["cat /etc/hostname; tail -f /var/log/audit/audit.log"]
+        #args: [/bin/sh, -c, 'cat /etc/passwd']
+        volumeMounts:
+        - name: etcdir
+          mountPath: /etc
+          readOnly: true
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        securityContext:
+               seLinuxOptions:
+                type: container_logreader_t
+                #privileged: true
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log
+            type: Directory
+        - name: etcdir
+          hostPath:
+            path: /etc
+            type: Directory
