@@ -23,7 +23,7 @@ type=SYSCALL msg=audit(1689698907.823:80423): arch=c000003e syscall=1 success=ye
 
 =============================================================================
 
-Observation: pod can read audit logs and any other files within /var/log with spc_t type and also can access host's /etc directory with privileged scc assigned to pod's account.
+Observation: pod can both read/write audit logs and any other files within /var/log with spc_t type and also can access host's /etc directory with privileged scc assigned to pod's account.
 
 =============================================================================
 apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
