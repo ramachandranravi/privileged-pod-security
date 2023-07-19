@@ -64,10 +64,8 @@ spec:
         volumeMounts:
         - name: etcdir
           mountPath: /etc
-          readOnly: true
         - name: varlog
           mountPath: /var/log
-          readOnly: true
         securityContext:
                 #seLinuxOptions:
                 #type: logsample-seprofile_logsample.process
