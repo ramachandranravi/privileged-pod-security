@@ -71,9 +71,7 @@ spec:
           readOnly: true
         securityContext:
               seLinuxOptions:
-                #type: logsample-seprofile_logsample.process
                 type: container_logreader_t
-                #privileged: true
       volumes:
         - name: varlog
           hostPath:
